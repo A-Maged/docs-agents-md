@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.agents-docs/
+*.tgz
+# next-agents-md
+.next-docs/
