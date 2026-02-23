@@ -295,7 +295,7 @@ async function promptForOptions(
     };
   }
 
-  // Custom repo mode
+  // Custom repo mode — collect repo, name, tag first
   const customResponse = await prompts(
     [
       {
@@ -325,6 +325,34 @@ async function promptForOptions(
         validate: (v: string) =>
           isValidTag(v.trim()) ? true : "Invalid characters in tag",
       },
+    ],
+    ON_CANCEL,
+  );
+
+  const repo = customResponse.repo.trim();
+  const tag = customResponse.tag.trim();
+
+  // Auto-detect docs path
+  let docsPath = "";
+  console.log(pc.gray("Detecting docs folder via GitHub API..."));
+  const treePaths = await fetchRepoTree(repo, tag);
+  if (treePaths) {
+    const detected = detectDocsPath(treePaths);
+    if (detected) {
+      const accepted = await confirmOrAutoAccept({
+        confirmMessage: `Detected docs at "${detected}". Use this path?`,
+        autoMessage: `Auto-detected docs path: "${detected}"`,
+      });
+      if (accepted) {
+        docsPath = detected;
+      }
+    }
+  }
+
+  // Fall back to manual prompt if auto-detection didn't resolve
+  if (!docsPath) {
+    console.log(pc.yellow("Could not auto-detect docs folder."));
+    const docsPathResponse = await prompts(
       {
         type: "text",
         name: "docsPath",
@@ -338,38 +366,17 @@ async function promptForOptions(
           return true;
         },
       },
-      {
-        type: "select",
-        name: "output",
-        message: "Target file",
-        choices: [
-          { title: DEFAULT_OUTPUT, value: DEFAULT_OUTPUT },
-          { title: "CLAUDE.md", value: "CLAUDE.md" },
-          { title: "Custom...", value: "__custom__" },
-        ],
-      },
-    ],
-    ON_CANCEL,
-  );
-
-  let output = customResponse.output;
-  if (output === "__custom__") {
-    const customOutputResponse = await prompts(
-      {
-        type: "text",
-        name: "file",
-        message: "Enter file path",
-        initial: DEFAULT_OUTPUT,
-      },
       ON_CANCEL,
     );
-    output = customOutputResponse.file;
+    docsPath = docsPathResponse.docsPath.trim();
   }
 
+  const output = await promptForOutputFile();
+
   return {
-    repo: customResponse.repo.trim(),
-    tag: customResponse.tag.trim(),
-    docsPath: customResponse.docsPath.trim(),
+    repo,
+    tag,
+    docsPath,
     name: customResponse.name.trim().toLowerCase(),
     displayName: customResponse.name.trim(),
     output,
