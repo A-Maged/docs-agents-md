@@ -47,7 +47,7 @@ export interface CloneDocsResult {
 }
 
 export function cloneDocs(options: CloneDocsOptions): CloneDocsResult {
-  const { repo, tag, docsPath, destDir, timeoutMs = 60_000 } = options;
+  const { repo, tag, docsPath, destDir, timeoutMs = 120_000 } = options;
 
   // Validate inputs — throw hard before any I/O
   validateRepo(repo);
