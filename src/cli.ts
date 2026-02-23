@@ -24,10 +24,17 @@ import { detectVersion } from "./lib/version-detector.js";
 import {
   DOCS_BASE_DIR,
   DEFAULT_OUTPUT,
-  NAME_REGEX,
-  TAG_REGEX,
+  REPO_REGEX as _REPO_REGEX,
+  NAME_REGEX as _NAME_REGEX,
+  TAG_REGEX as _TAG_REGEX,
   formatSize,
 } from "./lib/constants.js";
+
+// Bind regex references to local consts so tsup doesn't lose them
+// during bundle-time variable renaming (esbuild collision bug).
+const isValidRepo = (v: string) => _REPO_REGEX.test(v);
+const isValidName = (v: string) => _NAME_REGEX.test(v);
+const isValidTag = (v: string) => _TAG_REGEX.test(v);
 import {
   ON_CANCEL,
   promptForOutputFile,
@@ -160,7 +167,7 @@ async function resolveOptions(flags: {
       process.exit(1);
     }
     const safeName = flags.name.trim().toLowerCase();
-    if (!NAME_REGEX.test(safeName)) {
+    if (!isValidName(safeName)) {
       console.error(
         pc.red(
           `Error: --name "${flags.name}" contains invalid characters. Use only letters, numbers, dots, hyphens, underscores.`,
@@ -296,7 +303,7 @@ async function promptForOptions(
         name: "repo",
         message: "GitHub repo (owner/repo)",
         validate: (v: string) =>
-          REPO_REGEX.test(v.trim()) ? true : "Format: owner/repo",
+          isValidRepo(v.trim()) ? true : "Format: owner/repo",
       },
       {
         type: "text",
@@ -305,7 +312,7 @@ async function promptForOptions(
         validate: (v: string) => {
           const trimmed = v.trim().toLowerCase();
           if (!trimmed) return "Required";
-          if (!NAME_REGEX.test(trimmed))
+          if (!isValidName(trimmed))
             return "Use only letters, numbers, dots, hyphens, underscores";
           return true;
         },
@@ -316,7 +323,7 @@ async function promptForOptions(
         message: "Git tag or branch",
         initial: "main",
         validate: (v: string) =>
-          TAG_REGEX.test(v.trim()) ? true : "Invalid characters in tag",
+          isValidTag(v.trim()) ? true : "Invalid characters in tag",
       },
       {
         type: "text",
