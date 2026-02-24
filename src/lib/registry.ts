@@ -178,7 +178,7 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   },
   convex: {
     repo: "get-convex/convex-backend",
-    docsPath: "npm-packages/docs",
+    docsPath: "npm-packages/docs/docs",
     defaultTag: "main",
     name: "Convex",
     packages: ["convex"],
@@ -199,4 +199,16 @@ export function getRegistryEntry(key: string): RegistryEntry | null {
  */
 export function listRegistryKeys(): string[] {
   return Object.keys(REGISTRY).sort();
+}
+
+/**
+ * Find a registry entry by its repo field (e.g., "get-convex/convex-backend").
+ * Returns the entry or null if no preset matches this repo.
+ */
+export function getRegistryEntryByRepo(repo: string): RegistryEntry | null {
+  const lower = repo.toLowerCase();
+  for (const entry of Object.values(REGISTRY)) {
+    if (entry.repo.toLowerCase() === lower) return entry;
+  }
+  return null;
 }

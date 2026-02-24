@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { REGISTRY, getRegistryEntry, listRegistryKeys } from "../registry.js";
+import {
+  REGISTRY,
+  getRegistryEntry,
+  getRegistryEntryByRepo,
+  listRegistryKeys,
+} from "../registry.js";
 
 describe("registry", () => {
   it("all entries have required fields", () => {
@@ -80,5 +85,28 @@ describe("registry", () => {
         expect(typeof entry.tagPrefix, `${key}.tagPrefix type`).toBe("string");
       }
     }
+  });
+
+  describe("getRegistryEntryByRepo", () => {
+    it("finds entry by exact repo match", () => {
+      const entry = getRegistryEntryByRepo("vercel/next.js");
+      expect(entry).not.toBeNull();
+      expect(entry!.name).toBe("Next.js");
+    });
+
+    it("is case-insensitive", () => {
+      expect(getRegistryEntryByRepo("Vercel/Next.js")).not.toBeNull();
+      expect(getRegistryEntryByRepo("VERCEL/NEXT.JS")).not.toBeNull();
+    });
+
+    it("returns null for unknown repo", () => {
+      expect(getRegistryEntryByRepo("unknown/repo")).toBeNull();
+    });
+
+    it("finds convex preset with correct docsPath", () => {
+      const entry = getRegistryEntryByRepo("get-convex/convex-backend");
+      expect(entry).not.toBeNull();
+      expect(entry!.docsPath).toBe("npm-packages/docs/docs");
+    });
   });
 });

@@ -16,6 +16,7 @@ import { injectIndex } from "./lib/inject.js";
 import { ensureGitignoreEntry } from "./lib/gitignore.js";
 import {
   getRegistryEntry,
+  getRegistryEntryByRepo,
   listRegistryKeys,
   REGISTRY,
 } from "./lib/registry.js";
@@ -29,17 +30,17 @@ import {
   TAG_REGEX as _TAG_REGEX,
   formatSize,
 } from "./lib/constants.js";
+import {
+  ON_CANCEL,
+  promptForOutputFile,
+  confirmOrAutoAccept,
+} from "./lib/prompt-helpers.js";
 
 // Bind regex references to local consts so tsup doesn't lose them
 // during bundle-time variable renaming (esbuild collision bug).
 const isValidRepo = (v: string) => _REPO_REGEX.test(v);
 const isValidName = (v: string) => _NAME_REGEX.test(v);
 const isValidTag = (v: string) => _TAG_REGEX.test(v);
-import {
-  ON_CANCEL,
-  promptForOutputFile,
-  confirmOrAutoAccept,
-} from "./lib/prompt-helpers.js";
 
 interface ResolvedOptions {
   repo: string;
@@ -52,6 +53,40 @@ interface ResolvedOptions {
   libKey?: string;
   /** Clean semver for index header display (avoids double-v in index-generator) */
   detectedVersion?: string;
+}
+
+/**
+ * Resolve the docs path for a repo: preset lookup → API auto-detect → fallback.
+ * Returns the resolved path, or "docs" if nothing worked.
+ */
+async function resolveDocsPath(repo: string, tag: string): Promise<string> {
+  // 1. Check if this repo matches a known preset
+  const presetMatch = getRegistryEntryByRepo(repo);
+  if (presetMatch) {
+    console.log(
+      pc.green(
+        `Using known docs path for ${presetMatch.name}: "${presetMatch.docsPath}"`,
+      ),
+    );
+    return presetMatch.docsPath;
+  }
+
+  // 2. Try auto-detection via GitHub API
+  console.log(pc.gray("Detecting docs folder via GitHub API..."));
+  const treePaths = await fetchRepoTree(repo, tag);
+  if (treePaths) {
+    const detected = detectDocsPath(treePaths);
+    if (detected) {
+      const accepted = await confirmOrAutoAccept({
+        confirmMessage: `Detected docs at "${detected}". Use this path?`,
+        autoMessage: `Auto-detected docs path: "${detected}"`,
+      });
+      if (accepted) return detected;
+    }
+  }
+
+  // 3. Nothing resolved
+  return "";
 }
 
 async function resolveOptions(flags: {
@@ -181,28 +216,11 @@ async function resolveOptions(flags: {
 
     // Auto-detect docs path if not explicitly provided
     if (!flags.docsPath) {
-      console.log(pc.gray("Detecting docs folder via GitHub API..."));
-      const treePaths = await fetchRepoTree(flags.repo, tag);
-      if (treePaths) {
-        const detected = detectDocsPath(treePaths);
-        if (detected) {
-          const accepted = await confirmOrAutoAccept({
-            confirmMessage: `Detected docs at "${detected}". Use this path?`,
-            autoMessage: `Auto-detected docs path: "${detected}"`,
-          });
-          docsPath = accepted ? detected : "docs";
-          if (!accepted) {
-            console.log(pc.yellow('Using default "docs" path'));
-          }
-        } else {
-          console.log(
-            pc.yellow(
-              'Could not auto-detect docs folder, using default "docs"',
-            ),
-          );
-          docsPath = "docs";
-        }
-      } else {
+      docsPath = await resolveDocsPath(flags.repo, tag);
+      if (!docsPath) {
+        console.log(
+          pc.yellow('Could not auto-detect docs folder, using default "docs"'),
+        );
         docsPath = "docs";
       }
     }
@@ -332,22 +350,8 @@ async function promptForOptions(
   const repo = customResponse.repo.trim();
   const tag = customResponse.tag.trim();
 
-  // Auto-detect docs path
-  let docsPath = "";
-  console.log(pc.gray("Detecting docs folder via GitHub API..."));
-  const treePaths = await fetchRepoTree(repo, tag);
-  if (treePaths) {
-    const detected = detectDocsPath(treePaths);
-    if (detected) {
-      const accepted = await confirmOrAutoAccept({
-        confirmMessage: `Detected docs at "${detected}". Use this path?`,
-        autoMessage: `Auto-detected docs path: "${detected}"`,
-      });
-      if (accepted) {
-        docsPath = detected;
-      }
-    }
-  }
+  // Auto-detect docs path — check preset registry first, then API
+  let docsPath = await resolveDocsPath(repo, tag);
 
   // Fall back to manual prompt if auto-detection didn't resolve
   if (!docsPath) {
