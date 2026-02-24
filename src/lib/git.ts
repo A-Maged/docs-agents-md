@@ -47,7 +47,7 @@ export interface CloneDocsResult {
 }
 
 export function cloneDocs(options: CloneDocsOptions): CloneDocsResult {
-  const { repo, tag, docsPath, destDir, timeoutMs = 120_000 } = options;
+  const { repo, tag, docsPath, destDir, timeoutMs = 300_000 } = options;
 
   // Validate inputs — throw hard before any I/O
   validateRepo(repo);
@@ -55,6 +55,14 @@ export function cloneDocs(options: CloneDocsOptions): CloneDocsResult {
   validateDocsPath(docsPath);
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "docs-agents-md-"));
+
+  // Prevent git's own HTTP low-speed timeout (ETIMEDOUT) on large repos.
+  // GitHub can take a long time to prepare pack files for massive repos.
+  const gitEnv = {
+    ...process.env,
+    GIT_HTTP_LOW_SPEED_LIMIT: "0",
+    GIT_HTTP_LOW_SPEED_TIME: "999999",
+  };
 
   try {
     // Step 1: Shallow clone with sparse filter
@@ -67,12 +75,19 @@ export function cloneDocs(options: CloneDocsOptions): CloneDocsResult {
           "1",
           "--filter=blob:none",
           "--sparse",
+          "--progress",
           "--branch",
           tag,
           `https://github.com/${repo}.git`,
           ".",
         ],
-        { cwd: tempDir, stdio: "pipe", timeout: timeoutMs },
+        {
+          cwd: tempDir,
+          // Show git progress (stderr) to user, capture stdout
+          stdio: ["pipe", "pipe", "inherit"],
+          timeout: timeoutMs,
+          env: gitEnv,
+        },
       );
     } catch (error: any) {
       const message = error instanceof Error ? error.message : String(error);
