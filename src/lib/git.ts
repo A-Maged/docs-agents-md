@@ -114,10 +114,12 @@ export function cloneDocs(options: CloneDocsOptions): CloneDocsResult {
     }
 
     // Step 2: Sparse-checkout the docs folder
+    // This triggers a blob fetch for the target directory (clone used --filter=blob:none).
     execFileSync("git", ["sparse-checkout", "set", docsPath], {
       cwd: tempDir,
-      stdio: "pipe",
-      timeout: 10_000,
+      stdio: ["pipe", "pipe", "inherit"],
+      timeout: timeoutMs,
+      env: gitEnv,
     });
 
     // Step 3: Verify the docs folder exists
